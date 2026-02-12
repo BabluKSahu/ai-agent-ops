@@ -1,0 +1,16 @@
+{
+"exportedVersion": "1.0",
+"workflows": [
+{
+"id": "1",
+"name": "Agent Orchestrator - Core",
+"nodes": [ /* same nodes array as in file 1 above; paste that nodes array here / ],
+"connections": { / same connections object as in file 1 above; paste here */ },
+"active": false,
+"settings": {},
+"createdAt": "2026-02-12T00:00:00.000Z",
+"updatedAt": "2026-02-12T00:00:00.000Z"
+}
+],
+"credentials": []
+}
