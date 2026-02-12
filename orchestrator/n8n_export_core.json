@@ -1,16 +1,177 @@
 {
-"exportedVersion": "1.0",
-"workflows": [
-{
-"id": "1",
-"name": "Agent Orchestrator - Core",
-"nodes": [ /* same nodes array as in file 1 above; paste that nodes array here / ],
-"connections": { / same connections object as in file 1 above; paste here */ },
-"active": false,
-"settings": {},
-"createdAt": "2026-02-12T00:00:00.000Z",
-"updatedAt": "2026-02-12T00:00:00.000Z"
-}
-],
-"credentials": []
+  "exportedVersion": "1.0",
+  "workflows": [
+    {
+      "id": "1",
+      "name": "Agent Orchestrator - Core",
+      "nodes": [
+        {
+          "parameters": {
+            "path": "start",
+            "httpMethod": "POST",
+            "responseMode": "lastNode",
+            "responseCode": 200,
+            "options": {}
+          },
+          "name": "Webhook Start",
+          "type": "n8n-nodes-base.webhook",
+          "typeVersion": 1,
+          "position": [250, 300],
+          "credentials": {}
+        },
+        {
+          "parameters": {
+            "functionCode": "const payload = $json;\nconst taskId = payload.task_id || `run-${Date.now()}`;\nconst workflow = payload.workflow || 'market_research_then_build';\nconst seed = payload.seed_niches || ['productivity templates','local marketing kits','micro-micro-saas for creators'];\nreturn [{ json: { task_id: taskId, workflow, seed_niches: seed } }];"
+          },
+          "name": "Init Task",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [520, 300]
+        },
+        {
+          "parameters": {
+            "functionCode": "const seed = $json.seed_niches;\nconst results = [];\nseed.forEach((s) => {\n  for (let i=1;i<=3;i++){\n    results.push({ niche: `${s} - subtopic ${i}`, opportunity_score: Math.round(60 + 15*Math.random()), rationale: `Automated candidate from ${s}` });\n  }\n});\nreturn results.map(r=>({ json: { task_id: $json.task_id, agent_name: 'Market-Research-Agent', status: 'completed', outputs: r, confidence_score: 0.85 } }));"
+          },
+          "name": "Market-Research-Agent (stub)",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [820, 200]
+        },
+        {
+          "parameters": {
+            "functionCode": "const inputs = items;\nconst outputs = [];\nfor (let i=0;i<Math.min(3, inputs.length); i++){\n  const niche = inputs[i].json.outputs.niche || inputs[i].json.outputs;\n  const productId = `prod-${Date.now()}-${i}`;\n  outputs.push({ json: { task_id: $json.task_id || `run-${Date.now()}`, agent_name: 'Product-Builder-Agent', status: 'completed', outputs: { product_id: productId, name: `${niche} Starter Pack`, landing_copy: { headline: `${niche} — Launch Fast`, benefits: ['Benefit 1','Benefit 2','Benefit 3'], features: ['Feature A','Feature B','Feature C'] }, files:[ { name: 'landing.html', url: 'https://babluksahu.github.io/ai-agent-ops/site/products/prod-1-landing.html' } ], price: 19.0, sku: `SKU-${Math.round(1000*Math.random())}` }, confidence_score:0.8 } });\n}\nreturn outputs;"
+          },
+          "name": "Product-Builder-Agent (stub)",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [1120, 200]
+        },
+        {
+          "parameters": {
+            "functionCode": "return items.map((it, idx)=>({ json: { task_id: it.json.task_id, agent_name: 'Dev-Deployment-Agent', status: 'completed', outputs: { product_id: it.json.outputs.product_id, deployed_url: `https://babluksahu.github.io/ai-agent-ops/site/products/${it.json.outputs.product_id}-landing.html` }, confidence_score: 0.9 } }));"
+          },
+          "name": "Dev-Deployment-Agent (stub)",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [1420, 200]
+        },
+        {
+          "parameters": {
+            "functionCode": "const itemsOut = items.map(it=>{\n  const url = it.json.outputs.deployed_url || (it.json.outputs && it.json.outputs.files && it.json.outputs.files[0] && it.json.outputs.files[0].url) || null;\n  const ok = url ? true : false;\n  return { json: { task_id: it.json.task_id, agent_name: 'QA-Agent', status: ok? 'completed':'failed', outputs: { product_id: it.json.outputs.product_id || null, deployed_url: url, link_check: ok }, confidence_score: ok?0.95:0.2 } };\n});\nreturn itemsOut;"
+          },
+          "name": "QA-Agent (stub)",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [1720, 200]
+        },
+        {
+          "parameters": {
+            "functionCode": "return items.map(it=>({ json: { task_id: it.json.task_id, agent_name: 'Finance-Agent', status: 'logged', outputs: { product_id: it.json.outputs.product_id, deployed_url: it.json.outputs.deployed_url, recorded_at: new Date().toISOString() } } }));"
+          },
+          "name": "Finance-Agent (stub)",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [2020, 200]
+        },
+        {
+          "parameters": {
+            "functionCode": "return [{ json: { message: 'Orchestrator run accepted', task_id: $json.task_id || null } }];"
+          },
+          "name": "Respond",
+          "type": "n8n-nodes-base.function",
+          "typeVersion": 1,
+          "position": [250, 460]
+        }
+      ],
+      "connections": {
+        "Webhook Start": {
+          "main": [
+            [
+              {
+                "node": "Init Task",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Init Task": {
+          "main": [
+            [
+              {
+                "node": "Market-Research-Agent (stub)",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Market-Research-Agent (stub)": {
+          "main": [
+            [
+              {
+                "node": "Product-Builder-Agent (stub)",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Product-Builder-Agent (stub)": {
+          "main": [
+            [
+              {
+                "node": "Dev-Deployment-Agent (stub)",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Dev-Deployment-Agent (stub)": {
+          "main": [
+            [
+              {
+                "node": "QA-Agent (stub)",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "QA-Agent (stub)": {
+          "main": [
+            [
+              {
+                "node": "Finance-Agent (stub)",
+                "type": "main",
+                "index": 0
+              },
+              {
+                "node": "Respond",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "Finance-Agent (stub)": {
+          "main": [
+            [
+              {
+                "node": "Respond",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      },
+      "active": false,
+      "settings": {},
+      "createdAt": "2026-02-12T00:00:00.000Z",
+      "updatedAt": "2026-02-12T00:00:00.000Z"
+    }
+  ],
+  "credentials": []
 }

@@ -1,25 +1,85 @@
 name: Dispatch Orchestrator Run
 
 on:
-workflow_dispatch:
-repository_dispatch:
-types: [trigger-orchestrator]
+  workflow_dispatch:
+    inputs:
+      workflow_type:
+        description: 'Workflow type'
+        required: true
+        default: 'market_research_then_build'
+        type: choice
+        options:
+          - market_research_then_build
+          - product_build_only
+      seed_niches:
+        description: 'Seed niches (comma separated)'
+        required: false
+        default: 'productivity templates,local marketing kits,micro-saas for creators'
+  repository_dispatch:
+    types: [trigger-orchestrator]
 
 jobs:
-dispatch:
-runs-on: ubuntu-latest
-steps:
-- name: Trigger Orchestrator Webhook
-env:
-ORCH_URL: ${{ secrets.ORCH_URL }}
-run: |
-if [ -z "$ORCH_URL" ]; then
-echo "ORCH_URL secret is not set"; exit 1
-fi
-curl -s -X POST "$ORCH_URL" -H "Content-Type: application/json" -d '{
-"task_id": "run-'$(date +%s)'",
-"workflow": "market_research_then_build",
-"seed_niches": ["productivity templates","local marketing kits","micro-saas for creators"]
-}' -o /tmp/orch_response.json
-echo "Response:"
-cat /tmp/orch_response.json
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Parse inputs
+        id: parse
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "WORKFLOW_TYPE=${{ github.event.inputs.workflow_type }}" >> $GITHUB_ENV
+            echo "SEED_NICHES=${{ github.event.inputs.seed_niches }}" >> $GITHUB_ENV
+          else
+            echo "WORKFLOW_TYPE=market_research_then_build" >> $GITHUB_ENV
+            echo "SEED_NICHES=productivity templates,local marketing kits,micro-saas for creators" >> $GITHUB_ENV
+          fi
+      
+      - name: Convert seed niches to array
+        id: convert
+        run: |
+          IFS=',' read -ra NICHE_ARRAY <<< "${{ env.SEED_NICHES }}"
+          JSON_ARRAY="["
+          for i in "${NICHE_ARRAY[@]}"; do
+            JSON_ARRAY="$JSON_ARRAY\"$(echo $i | xargs)\","
+          done
+          JSON_ARRAY="${JSON_ARRAY%,}]"
+          echo "NICHES_JSON=$JSON_ARRAY" >> $GITHUB_ENV
+      
+      - name: Trigger n8n Orchestrator Webhook
+        env:
+          ORCH_URL: ${{ secrets.ORCH_URL }}
+        run: |
+          if [ -z "$ORCH_URL" ]; then
+            echo "❌ ORCH_URL secret is not set"
+            echo "Please add your n8n webhook URL to GitHub secrets:"
+            echo "1. Go to Settings → Secrets → Actions"
+            echo "2. Click 'New repository secret'"
+            echo "3. Name: ORCH_URL"
+            echo "4. Value: Your n8n webhook URL (e.g., https://your-n8n.cloud/webhook/start)"
+            exit 1
+          fi
+          
+          echo "🚀 Triggering n8n orchestrator with workflow: ${{ env.WORKFLOW_TYPE }}"
+          echo "📦 Seed niches: ${{ env.SEED_NICHES }}"
+          
+          curl -s -X POST "$ORCH_URL" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "task_id": "gh-run-'$(date +%s)'",
+              "workflow": "'${{ env.WORKFLOW_TYPE }}'",
+              "seed_niches": '"${{ env.NICHES_JSON }}"'
+            }' -o /tmp/orch_response.json
+          
+          echo ""
+          echo "✅ Orchestrator Response:"
+          cat /tmp/orch_response.json
+          echo ""
+          echo "📝 Full response saved to /tmp/orch_response.json"
+          
+      - name: Upload response artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: orchestrator-response
+          path: /tmp/orch_response.json
