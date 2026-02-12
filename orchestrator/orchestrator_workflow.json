@@ -1,0 +1,21 @@
+{
+  "name": "Agent Orchestrator - Core",
+  "version": "0.1",
+  "webhooks": {
+    "start": "/start",
+    "run_agent": "/run-agent",
+    "status": "/status",
+    "report": "/report"
+  },
+  "workflows": {
+    "market_research_then_build": {
+      "steps": [
+        {"step":"market_research","agent":"Market-Research-Agent"},
+        {"step":"product_build","agent":"Product-Builder-Agent"},
+        {"step":"deploy","agent":"Dev-Deployment-Agent"},
+        {"step":"qa","agent":"QA-Agent"},
+        {"step":"log","agent":"Finance-Agent"}
+      ]
+    }
+  }
+}
