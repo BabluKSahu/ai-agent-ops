@@ -79,7 +79,7 @@ jobs:
           echo "📝 Full response saved to /tmp/orch_response.json"
           
       - name: Upload response artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: orchestrator-response
           path: /tmp/orch_response.json
