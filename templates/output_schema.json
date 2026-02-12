@@ -1,0 +1,12 @@
+{
+  "task_id": "...",
+  "agent_name": "...",
+  "status":"completed|failed",
+  "outputs":{
+    "files":[{"name":"...","url":"..."}],
+    "copy":{"landing":"...","emails":["..."]},
+    "metrics":{"est_traffic":0,"price":0}
+  },
+  "confidence_score":0.0
+}
+
