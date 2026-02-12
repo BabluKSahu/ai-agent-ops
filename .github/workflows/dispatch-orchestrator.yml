@@ -1,0 +1,25 @@
+name: Dispatch Orchestrator Run
+
+on:
+workflow_dispatch:
+repository_dispatch:
+types: [trigger-orchestrator]
+
+jobs:
+dispatch:
+runs-on: ubuntu-latest
+steps:
+- name: Trigger Orchestrator Webhook
+env:
+ORCH_URL: ${{ secrets.ORCH_URL }}
+run: |
+if [ -z "$ORCH_URL" ]; then
+echo "ORCH_URL secret is not set"; exit 1
+fi
+curl -s -X POST "$ORCH_URL" -H "Content-Type: application/json" -d '{
+"task_id": "run-'$(date +%s)'",
+"workflow": "market_research_then_build",
+"seed_niches": ["productivity templates","local marketing kits","micro-saas for creators"]
+}' -o /tmp/orch_response.json
+echo "Response:"
+cat /tmp/orch_response.json
