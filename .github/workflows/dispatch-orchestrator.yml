@@ -47,39 +47,112 @@ jobs:
           JSON_ARRAY="${JSON_ARRAY%,}]"
           echo "NICHES_JSON=$JSON_ARRAY" >> $GITHUB_ENV
       
+      - name: Debug - Print Webhook URL (masked)
+        env:
+          ORCH_URL: ${{ secrets.ORCH_URL }}
+        run: |
+          echo "🔍 Checking ORCH_URL secret..."
+          if [ -z "$ORCH_URL" ]; then
+            echo "❌ ORCH_URL secret is not set"
+            exit 1
+          else
+            # Show first 20 chars and last 20 chars
+            URL_LENGTH=${#ORCH_URL}
+            FIRST_CHARS=${ORCH_URL:0:20}
+            LAST_CHARS=${ORCH_URL: -20}
+            echo "✅ ORCH_URL found (length: $URL_LENGTH chars)"
+            echo "📌 URL starts with: $FIRST_CHARS..."
+            echo "📌 URL ends with: ...$LAST_CHARS"
+          fi
+      
+      - name: Test n8n webhook connection
+        env:
+          ORCH_URL: ${{ secrets.ORCH_URL }}
+        run: |
+          echo "🧪 Testing webhook connection..."
+          
+          # Test 1: Basic connectivity
+          echo "Test 1: Basic HTTP connectivity"
+          curl -I -s "https://lumineerco1.app.n8n.cloud" -o /dev/null -w "Status: %{http_code}\n" || echo "❌ Cannot reach n8n.cloud"
+          
+          # Test 2: Webhook ping
+          echo -e "\nTest 2: Webhook ping"
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$ORCH_URL" \
+            -H "Content-Type: application/json" \
+            -d '{"ping": true}' || echo "CURL_FAILED")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          if [[ "$HTTP_CODE" == "200" ]]; then
+            echo "✅ Webhook reachable! HTTP $HTTP_CODE"
+          elif [[ "$HTTP_CODE" == "404" ]]; then
+            echo "❌ Webhook path not found (404) - Check if workflow is ACTIVE"
+          elif [[ "$HTTP_CODE" == "403" ]]; then
+            echo "❌ Forbidden (403) - Check n8n permissions"
+          else
+            echo "❌ Webhook not reachable. HTTP $HTTP_CODE"
+          fi
+      
       - name: Trigger n8n Orchestrator Webhook
         env:
           ORCH_URL: ${{ secrets.ORCH_URL }}
         run: |
           if [ -z "$ORCH_URL" ]; then
             echo "❌ ORCH_URL secret is not set"
-            echo "Please add your n8n webhook URL to GitHub secrets:"
-            echo "1. Go to Settings → Secrets → Actions"
-            echo "2. Click 'New repository secret'"
-            echo "3. Name: ORCH_URL"
-            echo "4. Value: Your n8n webhook URL (e.g., https://your-n8n.cloud/webhook/start)"
             exit 1
           fi
           
           echo "🚀 Triggering n8n orchestrator with workflow: ${{ env.WORKFLOW_TYPE }}"
           echo "📦 Seed niches: ${{ env.SEED_NICHES }}"
+          echo "🌐 Webhook URL: $ORCH_URL"
           
-          curl -s -X POST "$ORCH_URL" \
+          # Proper JSON escaping
+          TASK_ID="gh-run-$(date +%s)"
+          WORKFLOW_TYPE="${{ env.WORKFLOW_TYPE }}"
+          NICHES_JSON="${{ env.NICHES_JSON }}"
+          
+          # Create JSON payload properly
+          PAYLOAD=$(cat <<EOF
+          {
+            "task_id": "$TASK_ID",
+            "workflow": "$WORKFLOW_TYPE",
+            "seed_niches": $NICHES_JSON
+          }
+          EOF
+          )
+          
+          echo "📤 Sending payload: $PAYLOAD"
+          
+          # Send request with verbose output for debugging
+          curl -v -X POST "$ORCH_URL" \
             -H "Content-Type: application/json" \
-            -d '{
-              "task_id": "gh-run-'$(date +%s)'",
-              "workflow": "'${{ env.WORKFLOW_TYPE }}'",
-              "seed_niches": '"${{ env.NICHES_JSON }}"'
-            }' -o /tmp/orch_response.json
+            -d "$PAYLOAD" \
+            -o /tmp/orch_response.json \
+            -w "\n📡 HTTP Status: %{http_code}\n" \
+            --max-time 30
+          
+          CURL_EXIT_CODE=$?
+          
+          if [ $CURL_EXIT_CODE -ne 0 ]; then
+            echo "❌ cURL failed with exit code: $CURL_EXIT_CODE"
+            echo "Common exit codes:"
+            echo "  3  - Malformed URL"
+            echo "  6  - Couldn't resolve host"
+            echo "  7  - Failed to connect"
+            echo "  28 - Timeout"
+            exit $CURL_EXIT_CODE
+          fi
           
           echo ""
           echo "✅ Orchestrator Response:"
-          cat /tmp/orch_response.json
-          echo ""
-          echo "📝 Full response saved to /tmp/orch_response.json"
+          cat /tmp/orch_response.json || echo "No response body"
           
       - name: Upload response artifact
+        if: always()  # Run even if previous step fails
         uses: actions/upload-artifact@v4
         with:
-           name: orchestrator-response-${{ github.run_id }}  # Unique name har run ke liye
-           path: /tmp/orch_response.json
+          name: orchestrator-response-${{ github.run_id }}
+          path: /tmp/orch_response.json
+          retention-days: 7
+          if-no-files-found: warn
